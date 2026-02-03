@@ -55,4 +55,12 @@ jobs:
           "
 
       - name: Run benchmark
-        run: ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ~/benchmark && php8.5 tempest data:parse"
+        run: |
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
+            cd ~/benchmark && 
+            php8.5 tempest data:parse --store &&
+            git checkout main
+            git add leaderboard.csv
+            git commit -am "Update leaderboard"
+            git push origin main
+          "
