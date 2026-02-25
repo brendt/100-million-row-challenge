@@ -13,7 +13,7 @@ final class Parser
 
         while ($line = fgets($handle)) {
             $offset = strcspn($line, ',');
-            $path = substr($line, offset: self::OFFSET_SITE, length: $offset - self::OFFSET_SITE);
+            $path = '/blog/' . substr($line, offset: self::OFFSET_SITE, length: $offset - self::OFFSET_SITE);
             $date = substr($line, offset: $offset + 1, length: 10);
             $data[$path][$date] ??= 0;
             $data[$path][$date] += 1;
