@@ -4,16 +4,19 @@ namespace App;
 
 final class Parser
 {
+    private const int OFFSET_SITE = 25;
+
     public function parse(string $inputPath, string $outputPath): void
     {
         $handle = fopen($inputPath, 'r');
         $data = [];
 
-        while ($line = fgetcsv($handle, escape: ',')) {
-            $path = str_replace('https://stitcher.io', '', $line[0]);
-            $year = substr($line[1], offset: 0, length: 10);
-            $data[$path][$year] ??= 0;
-            $data[$path][$year] += 1;
+        while ($line = fgets($handle)) {
+            $offset = strcspn($line, ',');
+            $path = substr($line, offset: self::OFFSET_SITE, length: $offset - self::OFFSET_SITE);
+            $date = substr($line, offset: $offset + 1, length: 10);
+            $data[$path][$date] ??= 0;
+            $data[$path][$date] += 1;
         }
 
         foreach ($data as &$visits) {
