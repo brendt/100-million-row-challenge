@@ -6,7 +6,7 @@ final class Parser
 {
     public function parse(string $inputPath, string $outputPath): void
     {
-        gc_disable();
+        gcg_disable();
 
         $fileSize = filesize($inputPath);
 
