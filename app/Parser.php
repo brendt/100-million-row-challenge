@@ -6,15 +6,15 @@ final class Parser
 {
     public function parse(string $inputPath, string $outputPath): void
     {
-        gcg_disable();
+        gc_disable();
 
         $fileSize = filesize($inputPath);
 
         // Detect year range from first line
-        $fp = fopen($inputPath, 'r');
+        $fp = fopen($inputPath, "r");
         $firstLine = fgets($fp);
         fclose($fp);
-        $cp = strpos($firstLine, ',', 25);
+        $cp = strpos($firstLine, ",", 25);
         $baseYear = (int) substr($firstLine, $cp + 1, 4);
         $startYear = $baseYear - 7;
         $endYear = $baseYear + 6;
@@ -25,14 +25,16 @@ final class Parser
         $dateCount = 0;
 
         for ($y = $startYear; $y <= $endYear; $y++) {
-            $ys = str_pad((string) ($y % 100), 2, '0', STR_PAD_LEFT);
+            $ys = str_pad((string) ($y % 100), 2, "0", STR_PAD_LEFT);
 
             for ($m = 1; $m <= 12; $m++) {
                 $ms = $m < 10 ? "0$m" : (string) $m;
                 $dim = match ($m) {
                     1, 3, 5, 7, 8, 10, 12 => 31,
                     4, 6, 9, 11 => 30,
-                    2 => ($y % 4 === 0 && ($y % 100 !== 0 || $y % 400 === 0)) ? 29 : 28,
+                    2 => $y % 4 === 0 && ($y % 100 !== 0 || $y % 400 === 0)
+                        ? 29
+                        : 28,
                 };
                 for ($d = 1; $d <= $dim; $d++) {
                     $ds = $d < 10 ? "0$d" : (string) $d;
@@ -46,21 +48,30 @@ final class Parser
         $numWorkers = min(8, max(1, (int) ceil($fileSize / 262144)));
 
         if ($numWorkers <= 1) {
-            $result = $this->processChunk($inputPath, 0, $fileSize, $dateIds, $dateCount);
+            $result = $this->processChunk(
+                $inputPath,
+                0,
+                $fileSize,
+                $dateIds,
+                $dateCount,
+            );
             $this->writeOutput($outputPath, $result, $datePrefixes, $dateCount);
             return;
         }
 
         $chunkSize = (int) ceil($fileSize / $numWorkers);
-        $tmpPrefix = sys_get_temp_dir() . '/100m_' . getmypid() . '_';
+        $tmpPrefix = sys_get_temp_dir() . "/100m_" . getmypid() . "_";
         $pids = [];
 
         for ($w = 0; $w < $numWorkers - 1; $w++) {
             $pid = pcntl_fork();
             if ($pid === 0) {
                 $r = $this->processChunk(
-                    $inputPath, $w * $chunkSize, ($w + 1) * $chunkSize,
-                    $dateIds, $dateCount,
+                    $inputPath,
+                    $w * $chunkSize,
+                    ($w + 1) * $chunkSize,
+                    $dateIds,
+                    $dateCount,
                 );
                 $this->writeWorkerResult($tmpPrefix . $w, $r, $dateCount);
                 exit(0);
@@ -69,8 +80,11 @@ final class Parser
         }
 
         $parentResult = $this->processChunk(
-            $inputPath, ($numWorkers - 1) * $chunkSize, $fileSize,
-            $dateIds, $dateCount,
+            $inputPath,
+            ($numWorkers - 1) * $chunkSize,
+            $fileSize,
+            $dateIds,
+            $dateCount,
         );
 
         foreach ($pids as $pid) {
@@ -86,14 +100,18 @@ final class Parser
 
         for ($w = 0; $w < $numWorkers - 1; $w++) {
             $this->mergeWorkerResult(
-                $tmpPrefix . $w, $dateCount,
-                $globalIds, $globalOrder, $gpc, $merged,
+                $tmpPrefix . $w,
+                $dateCount,
+                $globalIds,
+                $globalOrder,
+                $gpc,
+                $merged,
             );
         }
 
         // Merge parent result
-        $pCounts = $parentResult['counts'];
-        foreach ($parentResult['paths'] as $lp => $path) {
+        $pCounts = $parentResult["counts"];
+        foreach ($parentResult["paths"] as $lp => $path) {
             if (!isset($globalIds[$path])) {
                 $globalIds[$path] = $gpc;
                 $globalOrder[] = $path;
@@ -108,14 +126,20 @@ final class Parser
 
         $this->writeOutput(
             $outputPath,
-            ['paths' => $globalOrder, 'counts' => $merged, 'pc' => $gpc],
-            $datePrefixes, $dateCount,
+            ["paths" => $globalOrder, "counts" => $merged, "pc" => $gpc],
+            $datePrefixes,
+            $dateCount,
         );
     }
 
-    private function processChunk(string $inputPath, int $startOffset, int $endOffset, array &$dateIds, int $dateCount): array
-    {
-        $fp = fopen($inputPath, 'r');
+    private function processChunk(
+        string $inputPath,
+        int $startOffset,
+        int $endOffset,
+        array &$dateIds,
+        int $dateCount,
+    ): array {
+        $fp = fopen($inputPath, "r");
         stream_set_read_buffer($fp, 0);
 
         if ($startOffset > 0) {
@@ -129,15 +153,17 @@ final class Parser
         $pathOrder = [];
         $pathCount = 0;
         $counts = array_fill(0, 300 * $dateCount, 0);
-        $remaining = '';
+        $remaining = "";
 
         while (($fpPos = ftell($fp)) < $endOffset) {
             $chunk = fread($fp, min(4194304, $endOffset - $fpPos));
-            if ($chunk === false || $chunk === '') break;
+            if ($chunk === false || $chunk === "") {
+                break;
+            }
 
-            if ($remaining !== '') {
+            if ($remaining !== "") {
                 $chunk = $remaining . $chunk;
-                $remaining = '';
+                $remaining = "";
             }
 
             $lastNl = strrpos($chunk, "\n");
@@ -152,8 +178,10 @@ final class Parser
 
             $pos = 0;
             while ($pos < $lastNl) {
-                $commaPos = strpos($chunk, ',', $pos + 25);
-                if ($commaPos === false || $commaPos + 26 > $lastNl) break;
+                $commaPos = strpos($chunk, ",", $pos + 25);
+                if ($commaPos === false || $commaPos + 26 > $lastNl) {
+                    break;
+                }
 
                 $path = substr($chunk, $pos + 25, $commaPos - $pos - 25);
 
@@ -171,14 +199,14 @@ final class Parser
             }
         }
 
-        if ($remaining !== '') {
+        if ($remaining !== "") {
             $rest = fgets($fp);
             if ($rest !== false) {
                 $remaining .= $rest;
             }
             $remaining = rtrim($remaining, "\n\r");
             if (strlen($remaining) > 25) {
-                $commaPos = strpos($remaining, ',', 25);
+                $commaPos = strpos($remaining, ",", 25);
                 if ($commaPos !== false) {
                     $path = substr($remaining, 25, $commaPos - 25);
                     $base = $pathIds[$path] ?? -1;
@@ -188,45 +216,57 @@ final class Parser
                         $pathOrder[] = $path;
                         $pathCount++;
                     }
-                    $counts[$base + $dateIds[substr($remaining, $commaPos + 3, 8)]]++;
+                    $counts[
+                        $base + $dateIds[substr($remaining, $commaPos + 3, 8)]
+                    ]++;
                 }
             }
         }
 
         fclose($fp);
-        return ['counts' => $counts, 'paths' => $pathOrder, 'pc' => $pathCount];
+        return ["counts" => $counts, "paths" => $pathOrder, "pc" => $pathCount];
     }
 
-    private function writeWorkerResult(string $file, array $result, int $dateCount): void
-    {
-        $pc = $result['pc'];
-        $buf = pack('V', $pc);
-        foreach ($result['paths'] as $p) {
-            $buf .= pack('v', strlen($p)) . $p;
+    private function writeWorkerResult(
+        string $file,
+        array $result,
+        int $dateCount,
+    ): void {
+        $pc = $result["pc"];
+        $buf = pack("V", $pc);
+        foreach ($result["paths"] as $p) {
+            $buf .= pack("v", strlen($p)) . $p;
         }
         // Pack counts in chunks to avoid argument limit
         $total = $pc * $dateCount;
-        $counts = $result['counts'];
+        $counts = $result["counts"];
         for ($i = 0; $i < $total; $i += 8192) {
-            $buf .= pack('V*', ...array_slice($counts, $i, min(8192, $total - $i)));
+            $buf .= pack(
+                "V*",
+                ...array_slice($counts, $i, min(8192, $total - $i)),
+            );
         }
         file_put_contents($file, $buf);
     }
 
     private function mergeWorkerResult(
-        string $file, int $dateCount,
-        array &$globalIds, array &$globalOrder, int &$gpc, array &$merged,
+        string $file,
+        int $dateCount,
+        array &$globalIds,
+        array &$globalOrder,
+        int &$gpc,
+        array &$merged,
     ): void {
         $raw = file_get_contents($file);
         unlink($file);
 
         $off = 0;
-        $pc = unpack('V', $raw, $off)[1];
+        $pc = unpack("V", $raw, $off)[1];
         $off += 4;
 
         $remap = [];
         for ($i = 0; $i < $pc; $i++) {
-            $pl = unpack('v', $raw, $off)[1];
+            $pl = unpack("v", $raw, $off)[1];
             $off += 2;
             $p = substr($raw, $off, $pl);
             $off += $pl;
@@ -242,7 +282,7 @@ final class Parser
         // Unpack and merge counts
         for ($lp = 0; $lp < $pc; $lp++) {
             $gBase = $remap[$lp] * $dateCount;
-            $chunk = unpack('V' . $dateCount, $raw, $off);
+            $chunk = unpack("V" . $dateCount, $raw, $off);
             $off += $dateCount * 4;
             $idx = 1;
             for ($d = 0; $d < $dateCount; $d++) {
@@ -251,18 +291,24 @@ final class Parser
         }
     }
 
-    private function writeOutput(string $outputPath, array $result, array &$datePrefixes, int $dateCount): void
-    {
-        $out = fopen($outputPath, 'w');
+    private function writeOutput(
+        string $outputPath,
+        array $result,
+        array &$datePrefixes,
+        int $dateCount,
+    ): void {
+        $out = fopen($outputPath, "w");
         stream_set_write_buffer($out, 2 << 20);
         fwrite($out, "{\n");
 
-        $counts = $result['counts'];
+        $counts = $result["counts"];
         $first = true;
 
-        foreach ($result['paths'] as $pathIdx => $path) {
-            $block = '';
-            if (!$first) $block = ",\n";
+        foreach ($result["paths"] as $pathIdx => $path) {
+            $block = "";
+            if (!$first) {
+                $block = ",\n";
+            }
             $first = false;
 
             $block .= '    "\/blog\/' . $path . '": {' . "\n";
@@ -273,7 +319,9 @@ final class Parser
             for ($d = 0; $d < $dateCount; $d++) {
                 $c = $counts[$base + $d];
                 if ($c > 0) {
-                    if (!$firstDate) $block .= ",\n";
+                    if (!$firstDate) {
+                        $block .= ",\n";
+                    }
                     $firstDate = false;
                     $block .= $datePrefixes[$d] . $c;
                 }
